@@ -313,14 +313,8 @@ install_launch_daemon() {
   
   # Copy script to safe location
   echo "Installing script to $safe_script_path..."
-  if ! sudo cp "$current_script" "$safe_script_path"; then
-    echo "Error: Failed to copy script to $safe_script_path (check sudo permissions or disk space)"
-    return 1
-  fi
-  if ! sudo chmod 755 "$safe_script_path"; then
-    echo "Error: Failed to set permissions on $safe_script_path (check sudo permissions)"
-    return 1
-  fi
+  sudo cp "$current_script" "$safe_script_path"
+  sudo chmod 755 "$safe_script_path"
   
   local plist_content="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
@@ -345,16 +339,8 @@ install_launch_daemon() {
 </dict>
 </plist>"
 
-  if ! echo "$plist_content" | sudo tee "$plist_path" >/dev/null; then
-    echo "Error: Failed to create LaunchDaemon plist at $plist_path (check sudo permissions)"
-    return 1
-  fi
-  
-  if ! sudo launchctl load "$plist_path"; then
-    echo "Error: Failed to load LaunchDaemon (check sudo permissions or launchctl status)"
-    return 1
-  fi
-  
+  echo "$plist_content" | sudo tee "$plist_path" >/dev/null
+  sudo launchctl load "$plist_path"
   echo "Script copied to $safe_script_path"
   echo "LaunchDaemon installed at $plist_path (runs once at startup after 60s delay)"
 }
