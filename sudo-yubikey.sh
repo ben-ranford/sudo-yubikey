@@ -299,6 +299,18 @@ install_launch_daemon() {
   local current_script
   current_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sudo-yubikey.sh"
   
+  # Ensure destination directory exists
+  local dest_dir
+  dest_dir="$(dirname "$safe_script_path")"
+  if [[ ! -d "$dest_dir" ]]; then
+    echo "Creating directory $dest_dir..."
+    if ! sudo mkdir -p "$dest_dir"; then
+      echo "Error: Failed to create directory $dest_dir"
+      return 1
+    fi
+    echo "Directory $dest_dir created successfully."
+  fi
+  
   # Copy script to safe location
   echo "Installing script to $safe_script_path..."
   sudo cp "$current_script" "$safe_script_path"
