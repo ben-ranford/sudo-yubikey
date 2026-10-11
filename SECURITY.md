@@ -17,8 +17,8 @@ recovery from errors, but do not replace a tested recovery procedure. Atomic
 replacement protects individual files, not a multi-file transaction across power
 loss. Locks coordinate this tool's invocations, not unrelated root processes.
 
-The automated suite validates configuration and failure logic. Hardware behavior,
-macOS PAM runtime semantics and complete dynamic-library provenance require
-administrator validation. Do not deploy without evaluating those limits.
+The automated suite validates configuration and failure logic. Validate the
+resulting authentication configuration and audit dynamic-library provenance
+before closing the administrator recovery shell.
 
 Never commit mapping files, authentication credentials, PINs or private logs.
