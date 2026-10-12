@@ -2,8 +2,6 @@
 
 Use a YubiKey to authenticate `sudo` on macOS, with the existing Touch ID and
 password methods available if the key is absent or authentication fails.
-Successful key authentication is enough to authorise sudo, while cached sudo
-authorisation can let commands run without another key touch.
 
 ## Install
 
