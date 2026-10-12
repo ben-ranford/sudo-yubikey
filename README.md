@@ -1,116 +1,113 @@
 # sudo-yubikey
 
-Authenticate sudo on macOS with a YubiKey, while keeping native Touch ID and
-password fallback. The command configures PAM explicitly, preserves unrelated
-settings, and backs up changes before writing.
+Use a YubiKey to authenticate `sudo` on macOS, with the existing Touch ID and
+password methods available if the key is absent or authentication fails.
+Successful key authentication is enough to authorise sudo, while cached sudo
+authorisation can let commands run without another key touch.
 
-## Installation
+## Install
 
-Requires macOS 14 or later and [Homebrew](https://brew.sh).
+On macOS 14 or later, install the command and its Python and pam-u2f dependencies
+with [Homebrew](https://brew.sh), then configure a FIDO U2F or FIDO2 YubiKey using
+the steps below.
 
 ```sh
 brew install ben-ranford/tap/sudo-yubikey
 sudo-yubikey --version
-sudo-yubikey --help
 ```
 
-This installs the command and its dependencies. It does not activate PAM, enroll
-keys, or install a background job. Running without arguments shows help.
+## Configure
 
-## Usage
+Keep a separate administrator shell open while you configure and test
+authentication so you can recover if a PAM change prevents sudo access.
 
-```sh
-sudo-yubikey --status             # Show the current sudo PAM configuration
-sudo-yubikey --disable --dry-run  # Preview removal of recognized YubiKey rules
-sudo "$(command -v sudo-yubikey)" --disable
-```
+### Enrol your keys
 
-A mapped key can authenticate before Touch ID or password. An absent, incorrect
-or unsuccessful key falls through to those existing methods. This is an
-alternative authentication method, not a mandatory key or password-plus-key
-second factor. Cached sudo authorization can skip PAM; a touch is not required
-for every command.
+Follow [Yubico's pamu2fcfg instructions](https://developers.yubico.com/pam-u2f/#obtaining-key-handles-and-public-keys)
+to enrol your main and backup keys with the default origin and appid, then place
+both credentials on one line for your username in `/etc/u2f_mappings`. Use a
+regular, root-owned file without group or other write permission.
 
-## Configuration
+### Enable authentication
 
-1. Enroll the invoking user and a backup key using
-   [Yubico's `pamu2fcfg` instructions](https://developers.yubico.com/pam-u2f/).
-   Keep `/etc/u2f_mappings` root-owned, a regular file, and not writable by other
-   users. Enrollment and PIN setup are separate from this command.
-2. Keep an administrator recovery shell open while changing PAM.
-3. Choose a trusted `pam_u2f.so` module and review a dry run before activation.
+| Homebrew module | Separately provisioned module |
+| --- | --- |
+| Use `$(brew --prefix pam-u2f)/lib/pam/pam_u2f.so`. | Use the absolute path to your `pam_u2f.so`. |
+| Homebrew normally uses a user-owned prefix, so anyone who can replace the module or its libraries can execute code as root. | The command requires a root-controlled module path and accepts only dependencies in `/usr/lib/` or `/System/Library/`. |
+| Pass `--trust-homebrew-module` to accept this access. | Omit `--trust-homebrew-module` to enforce these checks. |
 
-For a module and dependency chain provisioned in root-controlled locations:
+Both options retain the PAM-file and mapping-file checks described in
+[SECURITY.md](SECURITY.md).
 
-```sh
-sudo-yubikey --install --dry-run --module /root-controlled/path/pam_u2f.so
-sudo "$(command -v sudo-yubikey)" --install --module /root-controlled/path/pam_u2f.so
-```
-
-Homebrew normally uses a user-owned prefix. To accept that its module and
-libraries execute in sudo's root context, explicitly opt in:
+For the Homebrew module, review the dry-run output before running the install command:
 
 ```sh
 module="$(brew --prefix pam-u2f)/lib/pam/pam_u2f.so"
-sudo-yubikey --install --dry-run --module "$module" --trust-homebrew-module
+sudo "$(command -v sudo-yubikey)" --install --dry-run --module "$module" --trust-homebrew-module
 sudo "$(command -v sudo-yubikey)" --install --module "$module" --trust-homebrew-module
 ```
 
-Anyone able to replace those libraries can execute code as root. The trust flag
-does not change their ownership or relax PAM-file checks. Review and trust the
-command and interpreter before running them as root; see the [security model](SECURITY.md).
-
-| Option | Behavior |
-| --- | --- |
-| `--install` | Activate a recognized macOS PAM layout; requires `--module` and enrollment. |
-| `--dry-run` | Preview an installation or removal without writes. |
-| `--pin` | Request PIN verification with a compatible FIDO2 key and enrollment. |
-| `--trust-homebrew-module` | Explicitly accept a user-managed module and its libraries. |
-| `--disable` | Remove recognized rules, preserving other settings and mappings. |
-| `--status` | Display the current sudo PAM files. |
-
-The default requests touch and turns off PIN and biometric verification. Use
-matching origin/appid and PIN policy during enrollment and authentication.
-Origin/appid remain at the module defaults, so hostname changes can invalidate
-enrollment. No `nouserok` or `alwaysok` option is generated.
-
-After activation, use `sudo -k` in a second terminal to check fresh authentication
-with and without the key. Keep the recovery shell open until fallback succeeds.
-
-## Troubleshooting
-
-- **Module trust rejected:** provision and audit the module and all dependencies
-  in root-controlled paths, or deliberately accept the Homebrew trust option.
-- **Enrollment rejected:** check the invoking user's mapping, ownership and
-  permissions. Do not publish mappings or credentials.
-- **Custom PAM layout or legacy daemon detected:** review it manually. The tool
-  refuses unfamiliar authentication stacks rather than bypassing existing factors.
-- **A write fails:** previous files are rolled back. Unique root-only backups in
-  `/var/db/sudo-yubikey` contain a manifest of targets, previous modes and backup
-  files. Keep the recovery shell available; multi-file changes are not atomic
-  across power loss.
-
-Repeated installation is idempotent. Removal does not delete `sudo_local`, erase
-mappings, or install a job that rewrites configuration at boot.
-
-## Development and contributing
+For a separately provisioned module, replace the example path and review the
+dry-run output before running the install command:
 
 ```sh
-git clone https://github.com/ben-ranford/sudo-yubikey.git
-cd sudo-yubikey
-python3 -m unittest discover -s tests -v
-python3 -m py_compile sudo_yubikey.py
-bash -n sudo-yubikey.sh
-shellcheck sudo-yubikey.sh
+module="/root-controlled/path/pam_u2f.so"
+sudo "$(command -v sudo-yubikey)" --install --dry-run --module "$module"
+sudo "$(command -v sudo-yubikey)" --install --module "$module"
 ```
 
-The test suite covers configuration, CLI preflight and failure handling with
-temporary fixtures and mocks. CI runs on Linux and macOS. Open an
-[issue](https://github.com/ben-ranford/sudo-yubikey/issues) or submit a pull request
-with focused changes and relevant tests. See [release changes](CHANGELOG.md).
+For touch and PIN, configure a PIN and matching FIDO2 credentials, then add
+`--pin` to the preview and install commands.
 
-## License and attribution
+### Test authentication
 
-Licensed under [EPL-2.0](LICENSE.md). The original implementation was based on
-[Arthur Ginzburg's sudo-touchid](https://github.com/artginzburg/sudo-touchid).
-Authentication uses [Yubico pam-u2f](https://developers.yubico.com/pam-u2f/).
+In a second terminal, clear the sudo timestamp and request fresh authentication:
+
+```sh
+sudo -k
+sudo -v
+```
+
+Touch the enrolled key when prompted, then repeat both commands with your backup
+key and again with no key connected to check the existing fallback. Keep the
+administrator shell open until all three checks succeed.
+
+## Check or disable
+
+To inspect the current sudo PAM files, run:
+
+```sh
+sudo-yubikey --status
+```
+
+To remove the recognised YubiKey rules, preview the change before applying it:
+
+```sh
+sudo-yubikey --disable --dry-run
+sudo "$(command -v sudo-yubikey)" --disable
+```
+
+Disabling preserves the other PAM settings and leaves `sudo_local` and the key
+mappings in place.
+
+## Configuration notes and recovery
+
+The default origin and appid depend on the hostname, so a hostname change can
+require you to enrol again. The default authentication policy disables PIN and
+biometric verification; `--pin` enables PIN verification for compatible
+credentials.
+
+If installation rejects a mapping, check that `/etc/u2f_mappings` is a regular,
+root-owned file with no group or other write permission and exactly one line
+for the invoking user. Keep this file private and do not replace it with a
+symbolic link.
+
+The command rejects unfamiliar PAM authentication layouts and refuses changes
+while a legacy sudo-yubikey boot daemon is present. Review either condition
+before changing the configuration.
+
+## Licence
+
+Licensed under [EPL-2.0](LICENSE.md), with authentication provided by
+[Yubico pam-u2f](https://developers.yubico.com/pam-u2f/). The original
+implementation was based on [Arthur Ginzburg's sudo-touchid](https://github.com/artginzburg/sudo-touchid).
